@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>拼图解法练习器 V7.0</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧩</text></svg>">
+    <style>
+        :root { --primary: #1a73e8; --bg: #f8f9fa; --accent: #34a853; --warn: #fb8c00; --pic: #673ab7; --text: #3c4043; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; colour: var(--text); }
+        
+        /* 顶部面板 */
+        .panel { background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); margin-bottom: 20px; width: 95%; max-width: 1000px; }
+        .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; justify-content: center; }
+        
+        /* 画布容器 */
+        .canvas-container { background: #fff; border: 3px solid #202124; border-radius: 8px; overflow: auto; max-width: 100%; max-height: 70vh; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        canvas { display: block; background: #fafafa; cursor: none; }
+
+        /* 统计栏 */
+        .stats-bar { display: flex; justify-content: space-between; width: 100%; margin: 15px 0; font-weight: bold; border-top: 1px solid #eee; padding-top: 15px; }
+        
+        /* 按钮样式 */
+        .btn { padding: 10px 16px; border: none; border-radius: 8px; cursor: pointer; colour: white; font-size: 13px; font-weight: bold; transition: all 0.2s; display: flex; align-items: center; gap: 5px; }
+        .btn-apply { background: var(--primary); }
+        .btn-export { background: var(--accent); }
+        .btn-import { background: var(--warn); }
+        .btn-png { background: var(--pic); }
+        .btn-info { background: #5f6368; }
+        .btn-reset { background: #d93025; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        
+        input[type="number"] { padding: 10px; border: 2px solid #dadce0; border-radius: 8px; width: 55px; outline: none; }
+
+        /* 弹窗 (Modal) 样式 */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(4px); }
+        .modal-content { background: white; width: 90%; max-width: 600px; padding: 30px; border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); position: relative; max-height: 80vh; overflow-y: auto; }
+        .close-btn { position: absolute; top: 15px; right: 20px; font-size: 24px; cursor: pointer; colour: #999; }
+        pre { background: #f1f3f4; padding: 15px; border-radius: 8px; font-size: 13px; overflow-x: auto; colour: #202124; border: 1px solid #dadce0; }
+        code { font-family: 'Consolas', monospace; }
+
+        #fileInput { display: none; }
+        .key-hint { margin-top: 10px; font-size: 12px; colour: #70757a; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div class="panel">
+        <div class="controls">
+            <div style="display:flex; flex-direction:column;">
+                <label style="font-size:11px; margin-bottom:5px; colour:#70757a;">尺寸 N</label>
+                <input type="number" id="gridSize" value="8" min="3" max="50">
+            </div>
+            <button class="btn btn-apply" onclick="initGrid()">新建</button>
+            <div style="width:1px; height:30px; background:#eee; margin:0 5px;"></div>
+            <button class="btn btn-export" onclick="exportSolution()">导出 JSON</button>
+            <button class="btn btn-import" onclick="triggerImport()">导入 JSON</button>
+            <button class="btn btn-png" onclick="exportImage()">导出图片</button>
+            <button class="btn btn-info" onclick="toggleModal(true)">格式说明</button>
+            <button class="btn btn-reset" onclick="clearPieces()">重置</button>
+            <input type="file" id="fileInput" accept=".json" onchange="handleImport(event)">
+        </div>
+        
+        <div class="stats-bar">
+            <span id="counter">已放置: 0 个</span>
+            <span id="rotLabel">旋转角度: 0°</span>
+        </div>
+        <div class="key-hint">快捷键：<b>R</b>/<b>Space</b> 旋转 | <b>左键</b>放置 | <b>右键</b>删除</div>
+    </div>
+
+    <div class="canvas-container">
+        <canvas id="mainCanvas"></canvas>
+    </div>
+
+    <div class="modal-overlay" id="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="toggleModal(false)">&times;</span>
+            <h3 style="margin-top:0;">JSON 数据格式描述</h3>
+            <p style="font-size: 14px; line-height: 1.6;">本工具导出的 JSON 文件用于记录网格配置及图形位置。复刻 AI 可参考以下结构进行解析：</p>
+            <pre><code>{
+  "gridSize": 8,           // 网格边长 (N)
+  "pieces": [              // 已放置图形的数组
+    {
+      "coords": [          // 单个图形占用的 6 个方格坐标
+        [row, col],        // [行索引, 列索引]
+        [0, 0], [0, 1], ... 
+      ]
+    }
+  ]
+}</code></pre>
+            <h4 style="margin-bottom:8px;">核心图形逻辑：</h4>
+            <ul style="font-size: 13px; colour: #5f6368;">
+                <li>原始坐标：<code>[(0,0), (0,1), (1,0), (1,2), (2,0), (2,1)]</code></li>
+                <li>旋转算法：基于 <code>(col, -row)</code> 变换实现 90° 旋转，并进行坐标平移归一化。</li>
+                <li>碰撞检查：<code>grid[row][col] === 0</code> 且在 <code>[0, N-1]</code> 范围内。</li>
+            </ul>
+        </div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+    const sizeInput = document.getElementById('gridSize');
+    const counterEl = document.getElementById('counter');
+    const rotEl = document.getElementById('rotLabel');
+    const fileInput = document.getElementById('fileInput');
+    const modal = document.getElementById('modal');
+
+    let N = 8;
+    const CELL_SIZE = 50; 
+    let grid = []; 
+    let pieces = []; 
+    let rotation = 0; 
+    let mousePos = { x: -1000, y: -1000 };
+
+    const baseShape = [[0,0], [0,1], [1,0], [1,2], [2,0], [2,1]];
+    const colors = ["#4285F4", "#EA4335", "#FBBC05", "#34A853", "#9C27B0", "#00ACC1", "#FF7043", "#5E35B1"];
+
+    function toggleModal(show) { modal.style.display = show ? 'flex' : 'none'; }
+
+    function getRotatedShape() {
+        let shape = baseShape.map(p => [...p]);
+        for (let i = 0; i < rotation; i++) { shape = shape.map(p => [p[1], -p[0]]); }
+        const minR = Math.min(...shape.map(p => p[0]));
+        const minC = Math.min(...shape.map(p => p[1]));
+        return shape.map(p => [p[0] - minR, p[1] - minC]);
+    }
+
+    function initGrid(customN = null) {
+        N = customN ? customN : (parseInt(sizeInput.value) || 8);
+        sizeInput.value = N;
+        canvas.width = N * CELL_SIZE;
+        canvas.height = N * CELL_SIZE;
+        grid = Array(N).fill().map(() => Array(N).fill(0));
+        pieces = [];
+        draw(); updateStats();
+    }
+
+    function clearPieces() {
+        if(!confirm("重置将清空所有已放置图形，确定吗？")) return;
+        grid = Array(N).fill().map(() => Array(N).fill(0));
+        pieces = [];
+        draw(); updateStats();
+    }
+
+    function draw(hidePreview = false) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = "#e8eaed"; ctx.lineWidth = 1;
+        for (let i = 0; i <= N; i++) {
+            ctx.beginPath(); ctx.moveTo(0, i * CELL_SIZE); ctx.lineTo(canvas.width, i * CELL_SIZE); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(i * CELL_SIZE, 0); ctx.lineTo(i * CELL_SIZE, canvas.height); ctx.stroke();
+        }
+        ctx.strokeStyle = "#202124"; ctx.lineWidth = 2; ctx.strokeRect(0, 0, canvas.width, canvas.height);
+
+        pieces.forEach((p, idx) => {
+            ctx.fillStyle = colors[idx % colors.length];
+            p.coords.forEach(([r, c]) => {
+                ctx.fillRect(c * CELL_SIZE + 2, r * CELL_SIZE + 2, CELL_SIZE - 4, CELL_SIZE - 4);
+            });
+        });
+
+        if (!hidePreview) {
+            const r = Math.floor(mousePos.y / CELL_SIZE), c = Math.floor(mousePos.x / CELL_SIZE);
+            const shape = getRotatedShape();
+            if (r >= 0 && r < N && c >= 0 && c < N) {
+                ctx.fillStyle = canPlace(r, c, shape) ? "rgba(52, 168, 83, 0.5)" : "rgba(217, 48, 37, 0.5)";
+                shape.forEach(([dr, dc]) => {
+                    if (r+dr < N && c+dc < N) ctx.fillRect((c+dc)*CELL_SIZE, (r+dr)*CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                });
+            }
+        }
+    }
+
+    function canPlace(r, c, shape) {
+        return shape.every(([dr, dc]) => {
+            const nr = r+dr, nc = c+dc;
+            return nr >= 0 && nr < N && nc >= 0 && nc < N && grid[nr][nc] === 0;
+        });
+    }
+
+    function updateStats() {
+        counterEl.innerText = `已放置: ${pieces.length} 个`;
+        rotEl.innerText = `旋转角度: ${rotation * 90}°`;
+    }
+
+    function exportImage() { draw(true); const l = document.createElement('a'); l.download='puzzle.png'; l.href=canvas.toDataURL(); l.click(); draw(); }
+
+    function exportSolution() {
+        const data = { gridSize: N, pieces: pieces.map(p => ({ coords: p.coords })) };
+        const b = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+        const u = URL.createObjectURL(b); const a = document.createElement('a');
+        a.href=u; a.download=`save_${N}x${N}.json`; a.click();
+    }
+
+    function triggerImport() { fileInput.click(); }
+    function handleImport(e) {
+        const f = e.target.files[0]; if(!f) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                const d = JSON.parse(ev.target.result);
+                initGrid(d.gridSize);
+                d.pieces.forEach((p, i) => {
+                    const id = Date.now()+i; pieces.push({id, coords:p.coords});
+                    p.coords.forEach(([nr, nc]) => grid[nr][nc]=id);
+                });
+                draw(); updateStats();
+            } catch(e) { alert("读取失败"); }
+        };
+        reader.readAsText(f);
+    }
+
+    canvas.addEventListener('mousemove', (e) => {
+        const r = canvas.getBoundingClientRect();
+        mousePos = { x: e.clientX - r.left, y: e.clientY - r.top };
+        draw();
+    });
+    canvas.addEventListener('mouseleave', () => { mousePos={x:-1000,y:-1000}; draw(); });
+    canvas.addEventListener('mousedown', (e) => {
+        const r = Math.floor(mousePos.y/CELL_SIZE), c = Math.floor(mousePos.x/CELL_SIZE);
+        if(e.button === 0) {
+            const s = getRotatedShape();
+            if(canPlace(r, c, s)) {
+                const id = Date.now(); const co = s.map(([dr, dc]) => [r+dr, c+dc]);
+                co.forEach(([nr, nc]) => grid[nr][nc]=id); pieces.push({id, coords:co});
+            }
+        } else if(e.button === 2) {
+            const id = grid[r][c]; if(id > 0) {
+                pieces = pieces.filter(p => p.id !== id);
+                grid = Array(N).fill().map(() => Array(N).fill(0));
+                pieces.forEach(p => p.coords.forEach(([nr, nc]) => grid[nr][nc]=p.id));
+            }
+        }
+        updateStats(); draw();
+    });
+
+    window.addEventListener('keydown', (e) => { if(e.key.toLowerCase()==='r' || e.code==='Space') { e.preventDefault(); rotation=(rotation+1)%4; draw(); updateStats(); } });
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+    initGrid();
+</script>
+</body>
+</html>
