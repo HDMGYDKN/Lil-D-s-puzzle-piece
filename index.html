@@ -2,169 +2,274 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>拼图解法练习器 V7.0</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧩</text></svg>">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Puzzle Studio V16.2</title>
     <style>
-        :root { --primary: #1a73e8; --bg: #f8f9fa; --accent: #34a853; --warn: #fb8c00; --pic: #673ab7; --text: #3c4043; }
-        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; colour: var(--text); }
-        
-        /* 顶部面板 */
-        .panel { background: white; padding: 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); margin-bottom: 20px; width: 95%; max-width: 1000px; }
-        .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; justify-content: center; }
-        
-        /* 画布容器 */
-        .canvas-container { background: #fff; border: 3px solid #202124; border-radius: 8px; overflow: auto; max-width: 100%; max-height: 70vh; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-        canvas { display: block; background: #fafafa; cursor: none; }
+        :root {
+            --primary: #4f46e5; 
+            --bg: #f8fafc; 
+            --card: #ffffff;
+            --text-dark: #0f172a; 
+            --text-muted: #475569;
+            --accent: #10b981; 
+            --danger: #ef4444; 
+            --border: #cbd5e1;
+        }
 
-        /* 统计栏 */
-        .stats-bar { display: flex; justify-content: space-between; width: 100%; margin: 15px 0; font-weight: bold; border-top: 1px solid #eee; padding-top: 15px; }
+        * { 
+            colour: var(--text-dark); 
+            font-family: 'Inter', system-ui, sans-serif; 
+            box-sizing: border-box;
+        }
         
-        /* 按钮样式 */
-        .btn { padding: 10px 16px; border: none; border-radius: 8px; cursor: pointer; colour: white; font-size: 13px; font-weight: bold; transition: all 0.2s; display: flex; align-items: center; gap: 5px; }
-        .btn-apply { background: var(--primary); }
-        .btn-export { background: var(--accent); }
-        .btn-import { background: var(--warn); }
-        .btn-png { background: var(--pic); }
-        .btn-info { background: #5f6368; }
-        .btn-reset { background: #d93025; }
-        .btn:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        body {
+            background-colour: var(--bg);
+            margin: 0; display: flex; flex-direction: column; align-items: center;
+            height: 100vh; overflow: hidden; user-select: none;
+        }
+
+        /* 顶部导航 */
+        .glass-header {
+            background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            width: 100%; padding: 12px 0; display: flex; justify-content: center; z-index: 10;
+        }
+        .header-content { width: 92%; max-width: 1200px; display: flex; justify-content: space-between; align-items: center; }
+
+        input[type=number] { 
+            text-align: center; background: #fff; border: 1px solid var(--border); 
+            border-radius: 8px; font-weight: 700; height: 32px; width: 50px;
+        }
+
+        .btn {
+            background: #fff; border: 1px solid var(--border); 
+            padding: 8px 15px; border-radius: 10px; cursor: pointer; 
+            font-weight: 600; font-size: 13px; transition: 0.2s;
+            display: flex; align-items: center; gap: 5px;
+        }
+        .btn:hover { background: #f1f5f9; border-colour: var(--primary); }
+        .btn-primary { background: var(--primary); colour: #fff !important; border: none; }
+        .btn-primary * { colour: #fff !important; }
+
+        /* 画布区域 */
+        .main-stage {
+            flex: 1; width: 100%; display: flex; justify-content: center; align-items: center; padding: 20px;
+        }
+        .canvas-container {
+            position: relative; border-radius: 16px; background: #fff;
+            padding: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.05);
+            border: 4px solid #fff; transition: 0.3s;
+        }
+        .canvas-container.delete-mode { 
+            border-colour: var(--danger); 
+            animation: pulse-border 1.5s infinite; 
+        }
+        @keyframes pulse-border { 0%, 100% { border-colour: var(--danger); } 50% { border-colour: #fee2e2; } }
+
+        canvas { display: block; background: #fff; border-radius: 8px; cursor: crosshair; }
+
+        /* 删除模式标签 */
+        #delete-label {
+            position: fixed; pointer-events: none; background: var(--danger);
+            colour: white !important; padding: 4px 10px; border-radius: 6px;
+            font-size: 12px; font-weight: 900; z-index: 9999;
+            display: none; transform: translate(15px, 15px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        }
+
+        /* 弹窗系统 */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(15, 23, 42, 0.5);
+            display: none; justify-content: center; align-items: center; z-index: 2000;
+            backdrop-filter: blur(5px);
+        }
+        .modal-card {
+            background: var(--card); border-radius: 20px; padding: 30px; 
+            width: 90%; max-width: 480px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+            max-height: 85vh; overflow-y: auto;
+        }
+        .modal-title { font-size: 1.4rem; font-weight: 800; margin-bottom: 15px; text-align: center; }
         
-        input[type="number"] { padding: 10px; border: 2px solid #dadce0; border-radius: 8px; width: 55px; outline: none; }
+        /* 图形矩阵展示 */
+        .matrix-preview {
+            background: #f1f5f9; border: 1px solid var(--border);
+            padding: 15px; border-radius: 10px; margin: 15px 0;
+            text-align: center; font-family: 'Courier New', monospace; 
+            font-weight: bold; font-size: 20px; line-height: 1.5; letter-spacing: 5px;
+            colour: var(--text-dark);
+        }
 
-        /* 弹窗 (Modal) 样式 */
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(4px); }
-        .modal-content { background: white; width: 90%; max-width: 600px; padding: 30px; border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); position: relative; max-height: 80vh; overflow-y: auto; }
-        .close-btn { position: absolute; top: 15px; right: 20px; font-size: 24px; cursor: pointer; colour: #999; }
-        pre { background: #f1f3f4; padding: 15px; border-radius: 8px; font-size: 13px; overflow-x: auto; colour: #202124; border: 1px solid #dadce0; }
-        code { font-family: 'Consolas', monospace; }
+        /* 2. JSON 代码块：白色背景，深色文字 */
+        .json-code {
+            background: #ffffff; /* 强制白色背景 */
+            colour: #334155 !important; /* 深色文字 */
+            border: 1px solid #94a3b8; /* 加深边框保证可见度 */
+            padding: 15px; border-radius: 8px; font-family: 'Menlo', monospace;
+            font-size: 12px; white-space: pre-wrap; margin: 10px 0;
+            text-align: left;
+        }
 
-        #fileInput { display: none; }
-        .key-hint { margin-top: 10px; font-size: 12px; colour: #70757a; text-align: center; }
+        /* 底部 Dock */
+        .bottom-dock {
+            position: fixed; bottom: 30px; background: rgba(255, 255, 255, 0.95);
+            padding: 12px 30px; border-radius: 20px; border: 1px solid var(--border);
+            display: flex; gap: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        .dock-item { display: flex; flex-direction: column; align-items: center; font-size: 12px; cursor: pointer; gap: 5px; font-weight: 600; }
+        .dock-item svg { width: 24px; height: 24px; stroke: var(--text-dark); stroke-width: 2.5; }
+        .dock-item.active { colour: var(--danger) !important; }
+        .dock-item.active svg { stroke: var(--danger); }
+
+        input[type="file"] { display: none; }
     </style>
 </head>
 <body>
 
-    <div class="panel">
-        <div class="controls">
-            <div style="display:flex; flex-direction:column;">
-                <label style="font-size:11px; margin-bottom:5px; colour:#70757a;">尺寸 N</label>
-                <input type="number" id="gridSize" value="8" min="3" max="50">
+    <div id="delete-label">删除模式 (ON)</div>
+
+    <div class="glass-header">
+        <div class="header-content">
+            <div style="font-weight: 900; font-size: 1.3rem;">PUZZLE STUDIO</div>
+            <div style="display:flex; gap:8px;">
+                <input type="number" id="gridSize" value="8" min="3" max="25">
+                <button class="btn btn-primary" onclick="initGrid()">生成</button>
+                <button class="btn" onclick="openModal('json-modal')">数据</button>
+                <button class="btn" onclick="exportImage()">导出图片</button>
+                <button class="btn" onclick="openModal('info-modal')">说明</button>
+                <button class="btn" style="colour:var(--danger)!important;" onclick="openModal('reset-modal')">重置</button>
             </div>
-            <button class="btn btn-apply" onclick="initGrid()">新建</button>
-            <div style="width:1px; height:30px; background:#eee; margin:0 5px;"></div>
-            <button class="btn btn-export" onclick="exportSolution()">导出 JSON</button>
-            <button class="btn btn-import" onclick="triggerImport()">导入 JSON</button>
-            <button class="btn btn-png" onclick="exportImage()">导出图片</button>
-            <button class="btn btn-info" onclick="toggleModal(true)">格式说明</button>
-            <button class="btn btn-reset" onclick="clearPieces()">重置</button>
-            <input type="file" id="fileInput" accept=".json" onchange="handleImport(event)">
         </div>
-        
-        <div class="stats-bar">
-            <span id="counter">已放置: 0 个</span>
-            <span id="rotLabel">旋转角度: 0°</span>
-        </div>
-        <div class="key-hint">快捷键：<b>R</b>/<b>Space</b> 旋转 | <b>左键</b>放置 | <b>右键</b>删除</div>
     </div>
 
-    <div class="canvas-container">
-        <canvas id="mainCanvas"></canvas>
-    </div>
-
-    <div class="modal-overlay" id="modal">
-        <div class="modal-content">
-            <span class="close-btn" onclick="toggleModal(false)">&times;</span>
-            <h3 style="margin-top:0;">JSON 数据格式描述</h3>
-            <p style="font-size: 14px; line-height: 1.6;">本工具导出的 JSON 文件用于记录网格配置及图形位置。复刻 AI 可参考以下结构进行解析：</p>
-            <pre><code>{
-  "gridSize": 8,           // 网格边长 (N)
-  "pieces": [              // 已放置图形的数组
-    {
-      "coords": [          // 单个图形占用的 6 个方格坐标
-        [row, col],        // [行索引, 列索引]
-        [0, 0], [0, 1], ... 
-      ]
-    }
-  ]
-}</code></pre>
-            <h4 style="margin-bottom:8px;">核心图形逻辑：</h4>
-            <ul style="font-size: 13px; colour: #5f6368;">
-                <li>原始坐标：<code>[(0,0), (0,1), (1,0), (1,2), (2,0), (2,1)]</code></li>
-                <li>旋转算法：基于 <code>(col, -row)</code> 变换实现 90° 旋转，并进行坐标平移归一化。</li>
-                <li>碰撞检查：<code>grid[row][col] === 0</code> 且在 <code>[0, N-1]</code> 范围内。</li>
-            </ul>
+    <div class="main-stage">
+        <div class="canvas-container" id="canvas-frame">
+            <canvas id="mainCanvas"></canvas>
         </div>
     </div>
+
+    <div class="bottom-dock">
+        <div class="dock-item" onclick="rotatePiece()">
+            <svg fill="none" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            <span>旋转 (R)</span>
+        </div>
+        <div class="dock-item" id="delBtn" onclick="toggleDeleteMode()">
+            <svg fill="none" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            <span>删除模式</span>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="info-modal">
+        <div class="modal-card">
+            <div class="modal-title">研究对象说明</div>
+            <p style="font-size:14px; colour:var(--text-muted);">本实验使用的多连块图形定义如下 (0代表空，1代表实体)：</p>
+            
+            <div class="matrix-preview">
+                1 1 0<br>
+                1 0 1<br>
+                1 1 0
+            </div>
+
+            <p style="font-size:14px; font-weight:700; margin-top:20px;">JSON 数据格式规范：</p>
+            <div class="json-code">{"gridSize": 8,"pieces": [{"colour": "#4f46e5","coords": [[0,0], [0,1], [1,0], [1,2]...]}]
+}</div>
+
+            <button class="btn btn-primary" style="width:100%; margin-top:20px; padding:12px; justify-content:center;" onclick="closeModals()">开始研究</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="reset-modal">
+        <div class="modal-card" style="max-width:320px; text-align:center;">
+            <div class="modal-title" style="colour:var(--danger)!important">确认操作</div>
+            <p style="font-size:14px;">是否清空画布上的所有图形？</p>
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button class="btn" style="flex:1; justify-content:center;" onclick="closeModals()">取消</button>
+                <button class="btn btn-primary" style="flex:1; background:var(--danger); justify-content:center;" onclick="confirmReset()">清空</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="json-modal">
+        <div class="modal-card">
+            <div class="modal-title">数据存取</div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                <button class="btn" style="flex-direction:column; padding:20px;" onclick="saveJson()"><b>导出 JSON</b></button>
+                <button class="btn" style="flex-direction:column; padding:20px;" onclick="triggerImport()"><b>导入 JSON</b></button>
+            </div>
+            <button class="btn" style="width:100%; margin-top:20px; justify-content:center;" onclick="closeModals()">关闭</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="colour-modal">
+        <div class="modal-card">
+            <div class="modal-title">选择颜色</div>
+            <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px;" id="swatch-box"></div>
+            <button class="btn" style="width:100%; margin-top:20px; justify-content:center;" onclick="closeModals()">完成</button>
+        </div>
+    </div>
+
+    <input type="file" id="file-input" accept=".json" onchange="handleImport(event)">
 
 <script>
     const canvas = document.getElementById('mainCanvas');
     const ctx = canvas.getContext('2d');
-    const sizeInput = document.getElementById('gridSize');
-    const counterEl = document.getElementById('counter');
-    const rotEl = document.getElementById('rotLabel');
-    const fileInput = document.getElementById('fileInput');
-    const modal = document.getElementById('modal');
+    const frame = document.getElementById('canvas-frame');
+    const delLabel = document.getElementById('delete-label');
+    
+    let N = 8, CELL_SIZE = 50, grid = [], pieces = [], rotation = 0, isDeleteMode = false;
+    let mousePos = { x: -1000, y: -1000 }, editingPiece = null;
 
-    let N = 8;
-    const CELL_SIZE = 50; 
-    let grid = []; 
-    let pieces = []; 
-    let rotation = 0; 
-    let mousePos = { x: -1000, y: -1000 };
-
+    const presetColors = ["#4f46e5", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#fb7185", "#38bdf8", "#facc15", "#2dd4bf", "#6366f1"];
+    
+    // 1. 图形坐标逻辑：严格对应 110 / 101 / 110
+    // Row 0: (0,0), (0,1)
+    // Row 1: (1,0), (1,2) -> 跳过 (1,1)
+    // Row 2: (2,0), (2,1)
     const baseShape = [[0,0], [0,1], [1,0], [1,2], [2,0], [2,1]];
-    const colors = ["#4285F4", "#EA4335", "#FBBC05", "#34A853", "#9C27B0", "#00ACC1", "#FF7043", "#5E35B1"];
 
-    function toggleModal(show) { modal.style.display = show ? 'flex' : 'none'; }
+    function initGrid() {
+        N = parseInt(document.getElementById('gridSize').value) || 8;
+        const availableHeight = window.innerHeight - 250;
+        CELL_SIZE = Math.min(50, Math.floor(availableHeight / N));
+        canvas.width = canvas.height = N * CELL_SIZE;
+        grid = Array(N).fill().map(() => Array(N).fill(null));
+        pieces = []; draw();
+    }
+
+    function rotatePiece() { rotation = (rotation + 1) % 4; draw(); }
 
     function getRotatedShape() {
         let shape = baseShape.map(p => [...p]);
-        for (let i = 0; i < rotation; i++) { shape = shape.map(p => [p[1], -p[0]]); }
-        const minR = Math.min(...shape.map(p => p[0]));
-        const minC = Math.min(...shape.map(p => p[1]));
+        for (let i = 0; i < rotation; i++) shape = shape.map(p => [p[1], -p[0]]);
+        const minR = Math.min(...shape.map(p => p[0])), minC = Math.min(...shape.map(p => p[1]));
         return shape.map(p => [p[0] - minR, p[1] - minC]);
     }
 
-    function initGrid(customN = null) {
-        N = customN ? customN : (parseInt(sizeInput.value) || 8);
-        sizeInput.value = N;
-        canvas.width = N * CELL_SIZE;
-        canvas.height = N * CELL_SIZE;
-        grid = Array(N).fill().map(() => Array(N).fill(0));
-        pieces = [];
-        draw(); updateStats();
-    }
-
-    function clearPieces() {
-        if(!confirm("重置将清空所有已放置图形，确定吗？")) return;
-        grid = Array(N).fill().map(() => Array(N).fill(0));
-        pieces = [];
-        draw(); updateStats();
-    }
-
-    function draw(hidePreview = false) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.strokeStyle = "#e8eaed"; ctx.lineWidth = 1;
-        for (let i = 0; i <= N; i++) {
-            ctx.beginPath(); ctx.moveTo(0, i * CELL_SIZE); ctx.lineTo(canvas.width, i * CELL_SIZE); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(i * CELL_SIZE, 0); ctx.lineTo(i * CELL_SIZE, canvas.height); ctx.stroke();
+    function draw(isExport = false) {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.strokeStyle = "#e2e8f0"; ctx.lineWidth = 1;
+        for(let i=0; i<=N; i++){
+            ctx.beginPath(); ctx.moveTo(i*CELL_SIZE,0); ctx.lineTo(i*CELL_SIZE,canvas.height); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0,i*CELL_SIZE); ctx.lineTo(canvas.width,i*CELL_SIZE); ctx.stroke();
         }
-        ctx.strokeStyle = "#202124"; ctx.lineWidth = 2; ctx.strokeRect(0, 0, canvas.width, canvas.height);
 
-        pieces.forEach((p, idx) => {
-            ctx.fillStyle = colors[idx % colors.length];
-            p.coords.forEach(([r, c]) => {
-                ctx.fillRect(c * CELL_SIZE + 2, r * CELL_SIZE + 2, CELL_SIZE - 4, CELL_SIZE - 4);
+        pieces.forEach(p => {ctx.fillStyle = p.colour;p.coords.forEach(([r, c]) => {
+                const x = c * CELL_SIZE + 4, y = r * CELL_SIZE + 4, s = CELL_SIZE - 8;
+                ctx.beginPath(); ctx.roundRect(x, y, s, s, 6); ctx.fill();
             });
         });
 
-        if (!hidePreview) {
+        if(!isExport && !isDeleteMode) {
             const r = Math.floor(mousePos.y / CELL_SIZE), c = Math.floor(mousePos.x / CELL_SIZE);
-            const shape = getRotatedShape();
-            if (r >= 0 && r < N && c >= 0 && c < N) {
-                ctx.fillStyle = canPlace(r, c, shape) ? "rgba(52, 168, 83, 0.5)" : "rgba(217, 48, 37, 0.5)";
+            if(r >= 0 && r < N && c >= 0 && c < N) {
+                const shape = getRotatedShape();
+                const ok = canPlace(r, c, shape);
+                ctx.fillStyle = ok ? "rgba(79, 70, 229, 0.4)" : "rgba(239, 68, 68, 0.4)";
                 shape.forEach(([dr, dc]) => {
-                    if (r+dr < N && c+dc < N) ctx.fillRect((c+dc)*CELL_SIZE, (r+dr)*CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                    if(r+dr < N && c+dc < N) {
+                        ctx.beginPath(); ctx.roundRect((c+dc)*CELL_SIZE + 2, (r+dr)*CELL_SIZE + 2, CELL_SIZE-4, CELL_SIZE-4, 6); ctx.fill();
+                    }
                 });
             }
         }
@@ -173,67 +278,96 @@
     function canPlace(r, c, shape) {
         return shape.every(([dr, dc]) => {
             const nr = r+dr, nc = c+dc;
-            return nr >= 0 && nr < N && nc >= 0 && nc < N && grid[nr][nc] === 0;
+            return nr >= 0 && nr < N && nc >= 0 && nc < N && grid[nr][nc] === null;
         });
     }
 
-    function updateStats() {
-        counterEl.innerText = `已放置: ${pieces.length} 个`;
-        rotEl.innerText = `旋转角度: ${rotation * 90}°`;
+    canvas.addEventListener('mousedown', (e) => {
+        const r = Math.floor(mousePos.y / CELL_SIZE), c = Math.floor(mousePos.x / CELL_SIZE);
+        if(r < 0 || r >= N || c < 0 || c >= N) return;
+        if(isDeleteMode || e.button === 2) {
+            const id = grid[r][c];
+            if(id) { pieces = pieces.filter(p => p.id !== id); refreshGrid(); }
+        } else {
+            const shape = getRotatedShape();
+            if(canPlace(r, c, shape)) {
+                const randomColor = presetColors[Math.floor(Math.random() * presetColors.length)];
+                const p = { id: Date.now(), colour: randomColor, coords: shape.map(([dr, dc]) => [r+dr, c+dc]) };
+                p.coords.forEach(([nr, nc]) => grid[nr][nc] = p.id);
+                pieces.push(p);
+            }
+        }
+        draw();
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        mousePos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        if(isDeleteMode) {
+            delLabel.style.left = e.clientX + 'px';
+            delLabel.style.top = e.clientY + 'px';
+        }
+        draw();
+    });
+
+    function toggleDeleteMode() {
+        isDeleteMode = !isDeleteMode;
+        frame.classList.toggle('delete-mode', isDeleteMode);
+        delLabel.style.display = isDeleteMode ? 'block' : 'none';
+        document.getElementById('delBtn').classList.toggle('active', isDeleteMode);
     }
 
-    function exportImage() { draw(true); const l = document.createElement('a'); l.download='puzzle.png'; l.href=canvas.toDataURL(); l.click(); draw(); }
-
-    function exportSolution() {
-        const data = { gridSize: N, pieces: pieces.map(p => ({ coords: p.coords })) };
-        const b = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
-        const u = URL.createObjectURL(b); const a = document.createElement('a');
-        a.href=u; a.download=`save_${N}x${N}.json`; a.click();
+    function exportImage() {
+        draw(true);
+        const link = document.createElement('a');
+        link.download = 'puzzle_matrix_export.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        draw();
     }
 
-    function triggerImport() { fileInput.click(); }
+    canvas.addEventListener('mouseleave', () => { mousePos = { x: -1000, y: -1000 }; draw(); });
+    canvas.addEventListener('dblclick', () => {
+        const r = Math.floor(mousePos.y / CELL_SIZE), c = Math.floor(mousePos.x / CELL_SIZE);
+        const id = grid[r][c];
+        if(id) { editingPiece = pieces.find(p => p.id === id); openModal('colour-modal'); setupColorPicker(); }
+    });
+    function setupColorPicker() {
+        const box = document.getElementById('swatch-box'); box.innerHTML = '';
+        presetColors.forEach(clr => {
+            const d = document.createElement('div'); d.style.background = clr; d.style.aspectRatio = '1'; d.style.borderRadius = '8px'; d.style.cursor = 'pointer';
+            d.onclick = () => { if(editingPiece) editingPiece.colour = clr; closeModals(); draw(); };box.appendChild(d);});}function refreshGrid() {
+        grid = Array(N).fill().map(() => Array(N).fill(null));
+        pieces.forEach(p => p.coords.forEach(([nr, nc]) => grid[nr][nc] = p.id));
+    }
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function closeModals() { document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = 'none'); }
+    function confirmReset() { pieces = []; refreshGrid(); draw(); closeModals(); }
+    function saveJson() {
+        const data = { gridSize: N, pieces: pieces.map(p => ({ colour: p.colour, coords: p.coords })) };
+        const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+        a.download = `puzzle_matrix_v16_2.json`; a.click();
+    }
+    function triggerImport() { document.getElementById('file-input').click(); }
     function handleImport(e) {
         const f = e.target.files[0]; if(!f) return;
         const reader = new FileReader();
         reader.onload = (ev) => {
-            try {
-                const d = JSON.parse(ev.target.result);
-                initGrid(d.gridSize);
-                d.pieces.forEach((p, i) => {
-                    const id = Date.now()+i; pieces.push({id, coords:p.coords});
-                    p.coords.forEach(([nr, nc]) => grid[nr][nc]=id);
-                });
-                draw(); updateStats();
-            } catch(e) { alert("读取失败"); }
+            const d = JSON.parse(ev.target.result);
+            N = d.gridSize; document.getElementById('gridSize').value = N;
+            initGrid();
+            d.pieces.forEach((p, i) => {
+                const id = Date.now() + i; pieces.push({id, colour: p.colour, coords: p.coords});
+                p.coords.forEach(([nr, nc]) => grid[nr][nc] = id);
+            });
+            draw(); closeModals();
         };
         reader.readAsText(f);
     }
-
-    canvas.addEventListener('mousemove', (e) => {
-        const r = canvas.getBoundingClientRect();
-        mousePos = { x: e.clientX - r.left, y: e.clientY - r.top };
-        draw();
+    window.addEventListener('keydown', (e) => { 
+        if(e.key === 'r' || e.key === 'R' || e.code === 'Space') { e.preventDefault(); rotatePiece(); } 
     });
-    canvas.addEventListener('mouseleave', () => { mousePos={x:-1000,y:-1000}; draw(); });
-    canvas.addEventListener('mousedown', (e) => {
-        const r = Math.floor(mousePos.y/CELL_SIZE), c = Math.floor(mousePos.x/CELL_SIZE);
-        if(e.button === 0) {
-            const s = getRotatedShape();
-            if(canPlace(r, c, s)) {
-                const id = Date.now(); const co = s.map(([dr, dc]) => [r+dr, c+dc]);
-                co.forEach(([nr, nc]) => grid[nr][nc]=id); pieces.push({id, coords:co});
-            }
-        } else if(e.button === 2) {
-            const id = grid[r][c]; if(id > 0) {
-                pieces = pieces.filter(p => p.id !== id);
-                grid = Array(N).fill().map(() => Array(N).fill(0));
-                pieces.forEach(p => p.coords.forEach(([nr, nc]) => grid[nr][nc]=p.id));
-            }
-        }
-        updateStats(); draw();
-    });
-
-    window.addEventListener('keydown', (e) => { if(e.key.toLowerCase()==='r' || e.code==='Space') { e.preventDefault(); rotation=(rotation+1)%4; draw(); updateStats(); } });
     canvas.addEventListener('contextmenu', e => e.preventDefault());
     initGrid();
 </script>
